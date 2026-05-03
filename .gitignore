@@ -27,3 +27,15 @@ _trial_temp
 .pydevproject
 .idea/
 .tox
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore the actual log data (too big for GitHub)
+var/lib/cowrie/tty/
+var/log/cowrie/cowrie.json
+dionaea_iot.sqlite
+
+# Ignore virtual environments
+venv/
+.env

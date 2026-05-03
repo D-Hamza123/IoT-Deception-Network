@@ -1,0 +1,114 @@
+import os
+import streamlit as st
+import pandas as pd
+import json
+import sqlite3
+import plotly.express as px
+
+# Path to the symbolic link we created
+IOT_DB_PATH = 'dionaea_iot.sqlite'
+COWRIE_LOG_PATH = 'var/log/cowrie/cowrie.json'
+
+st.set_page_config(page_title="IoT Honeypot Analyzer", layout="wide")
+st.title("IoT Deception Network: Threat Analysis")
+
+# --- DATA LOADING FUNCTIONS ---
+
+def load_cowrie_data():
+    data = []
+    if not os.path.exists(COWRIE_LOG_PATH):
+        return pd.DataFrame()
+    with open(COWRIE_LOG_PATH, 'r') as f:
+        for line in f:
+            try:
+                entry = json.loads(line)
+                # We only want login attempts and command executions for the charts
+                if entry['eventid'] in ['cowrie.login.success', 'cowrie.login.failed', 'cowrie.command.input']:
+                    data.append({
+                        'timestamp': entry['timestamp'],
+                        'eventid': entry['eventid'].replace('cowrie.', ''), # Clean up names
+                        'src_ip': entry.get('src_ip', '0.0.0.0'),
+                        'username': entry.get('username', 'N/A'),
+                        'password': entry.get('password', 'N/A'),
+                        'input': entry.get('input', '') # For commands
+                    })
+            except:
+                continue
+
+
+    df = pd.DataFrame(data)
+    if not df.empty:
+        # Convert to proper time format
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    return df
+
+def load_iot_data():
+    if not os.path.exists(IOT_DB_PATH):
+        return pd.DataFrame(columns=['Timestamp', 'Attacker IP', 'Port', 'Protocol'])
+
+    try:
+        conn = sqlite3.connect(IOT_DB_PATH)
+        query = """
+        SELECT
+            connection_timestamp as Timestamp,
+            remote_host as 'Attacker IP',
+            local_port as Port
+        FROM connections
+        ORDER BY connection_timestamp DESC
+        LIMIT 10
+        """
+        df_iot = pd.read_sql_query(query, conn)
+        conn.close()
+	
+	if not df_iot.empty:
+            # Fixing the Dionaea timestamp format
+            df_iot['Timestamp'] = pd.to_datetime(df_iot['Timestamp'])
+
+        # Port mapping for IoT and Infrastructure
+        port_map = {
+            1883: "MQTT (IoT)",
+            445: "SMB (Windows)",
+            3306: "MySQL",
+            1433: "MSSQL",
+            81: "HTTP-Alt",
+            135: "RPC Discovery"
+        }
+        df_iot['Protocol'] = df_iot['Port'].map(lambda x: port_map.get(x, "Unknown"))
+        return df_iot
+    except Exception as e:
+        st.error(f"Error reading Dionaea logs: {e}")
+        return pd.DataFrame()
+
+# --- DASHBOARD LAYOUT ---
+
+tab1, tab2 = st.tabs(["SH Analytics (Cowrie)", ",""IoT & Protocol Sensors (Dionaea)"])
+
+with tab1:
+    st.header("SSH Attack Activity")
+    cowrie_df = load_cowrie_data()
+
+    if not cowrie_df.empty:
+        # --- METRICS ---
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Attacks", len(cowrie_df))
+        col2.metric("Unique IPs", cowrie_df['src_ip'].nunique())
+        col3.metric("Top Username", cowrie_df['username'].mode()[0] if not cowrie_df['username'].empty else "N/A")
+
+        # --- CHART 1: ATTACK TIMELINE ---
+        st.subheader("Attack Intensity Over Time")
+        # Group by minute to see spikes
+        timeline = cowrie_df.set_index('timestamp').resample('1min').count().reset_index()
+        fig_line = px.line(timeline, x='timestamp', y='even
+
+with tab2:
+    st.header("IoT & Service Probes")
+    iot_df = load_iot_data()
+    if not iot_df.empty:
+        # Visualizing the ports being attacked
+        fig = px.bar(iot_df, x='Protocol', title="Attacks by Protocol", color='Protocol')
+        st.plotly_chart(fig, width='stretch')
+
+        # Raw Data Table
+        st.table(iot_df)
+    else:
+        st.info("No IoT data found yet. Try scanning the Ubuntu IP from another machine!")

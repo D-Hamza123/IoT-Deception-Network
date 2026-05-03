@@ -1,0 +1,29 @@
+services:
+  # Node 1: Admin/Shell Deception (SSH/Telnet)
+  cowrie:
+    container_name: cowrie
+    image: cowrie/cowrie:latest
+    restart: always
+    ports:
+      - "2222:2222"
+      - "2223:2223"
+    volumes:
+      - ./etc:/cowrie/cowrie-git/etc
+      - ./var:/cowrie/cowrie-git/var
+
+  # Node 2: IoT Protocol Deception (UPnP, MQTT, SMB, FTP)
+  dionaea:
+    container_name: dionaea
+    image: ghcr.io/telekom-security/dionaea:24.04.1
+    restart: always
+    network_mode: "host"
+    ports:
+      - "21:21"       # FTP
+      - "445:445"     # SMB (File sharing)
+      - "1883:1883"   # MQTT (Smart Home Protocol)
+      - "80:80"       # HTTP
+    volumes:
+      - dionaea_logs:/opt/dionaea/var
+
+volumes:
+  dionaea_logs:
