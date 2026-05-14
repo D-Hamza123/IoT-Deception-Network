@@ -1,0 +1,14 @@
+# Ignore log files and databases
+**/var/log/
+**/var/lib/cowrie/
+*.json
+*.log
+*.sqlite
+
+# Ignore unique host keys (the honeypot will regenerate these)
+**/ssh_host_*
+
+# Ignore Python environment and cache
+__pycache__/
+*.pyc
+.env

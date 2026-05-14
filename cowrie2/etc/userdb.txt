@@ -1,0 +1,5 @@
+root:0:*
+admin:0:*
+oracle:0:oracle
+user:0:password
+
